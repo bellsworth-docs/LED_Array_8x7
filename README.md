@@ -5,7 +5,7 @@ SparkFun LED Array 8x7
 
 [*SparkFun LED Array - 8x7*](https://www.sparkfun.com/products/13795)
 
-56 Charlieplexed LEDs arranged in an 8x7 array. The board requires 8 pins, and the library supports any ATmega 328-based Arduino.
+56 Charlieplexed LEDs arranged in an 8x7 array. The board requires 8 pins, and the library supports any ATmega 328-based and ATmega 32U4-based Arduino.
 
 Repository Contents
 -------------------
