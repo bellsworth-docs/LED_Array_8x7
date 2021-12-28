@@ -42,13 +42,35 @@ static const unsigned int NUM_LEDS = COL_SIZE * ROW_SIZE;
 static const unsigned int ALL_BUT_LAST_COL = NUM_LEDS - COL_SIZE;
 
 /* Global variables */
+
+#if defined __AVR_ATmega168__ || \
+    defined __AVR_ATmega328__ || \
+    defined __AVR_ATmega328P__
+
 ISR(TIMER2_OVF_vect);
+
+#elif defined __AVR_ATmega32U4__
+
+ISR(TIMER1_OVF_vect); 
+
+#endif
 
 /* LED Array class */
 class SparkFun_LED_8x7 {
     
     /* The ISR is our friend! It can call our functions. */
+
+#if defined __AVR_ATmega168__ || \
+    defined __AVR_ATmega328__ || \
+    defined __AVR_ATmega328P__
+
     friend void TIMER2_OVF_vect();
+
+#elif defined __AVR_ATmega32U4__
+    
+    friend void TIMER1_OVF_vect();
+    
+#endif
     
 public:
     
