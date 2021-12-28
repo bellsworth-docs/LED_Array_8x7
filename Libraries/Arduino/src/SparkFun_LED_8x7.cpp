@@ -71,10 +71,10 @@ SparkFun_LED_8x7::~SparkFun_LED_8x7()
 bool SparkFun_LED_8x7::init(byte pins[NUM_CHAPLEX_PINS])
 {
 
-// Right now, we only compile for the ATmega 168/328-based Arduinos
 #if defined __AVR_ATmega168__ || \
     defined __AVR_ATmega328__ || \
-    defined __AVR_ATmega328P__
+    defined __AVR_ATmega328P__ || \
+    defined __AVR_ATmega32U4__
 
     /* If we are scrolling, stop and delete our string buffer */
     if ( scrolling_ ) 
@@ -113,13 +113,46 @@ bool SparkFun_LED_8x7::init(byte pins[NUM_CHAPLEX_PINS])
        count = 256 - (2.048 ms * F_CPU) / 1024 */
     timer2_count_ = 256 - (2 * (F_CPU / 1000000));  // Aim for 2.048ms refresh
     
-    /* Initialize Timer 2 */
     noInterrupts();                                 // Disable interrupts
+ 
+ #if defined __AVR_ATmega168__ || \
+    defined __AVR_ATmega328__ || \
+    defined __AVR_ATmega328P__
+
+    /*
+    * The Chaplex library was originally written for ATmega168/328/328P.
+    * Timer 2 is an 8-bit counter that (as I understand it) is used to move
+    * to the next step in the animation. To do that, we use the the interrupt
+    * generated when Timer 2 overflows to trigger our next update.
+    */
+ 
     TCCR2A = 0;                                     // Normal operation
     TCCR2B = 0;                                     // Clear prescaler
     TCNT2 = timer2_count_;                          // Load counter
     TCCR2B |= (1 << CS22) | (1 << CS21) | (1 << CS20);  // Prescaler = 1024
     TIMSK2 |= (1 << TOIE2);                         // Enable timer overflow
+    
+#elif defined __AVR_ATmega32U4__
+
+    /*
+    * ATmega32U4 has an 8-bit clock on Timer 0, but the millis() function is
+    * tied to it. The next-best option is Timer 1, which is a 16-bit timer.
+    * If we naively change the timer names between code, we don't see a display
+    * (we get stuck waiting for an interrupt). But we can take advantage of
+    * separately-addressable high and low bytes on Timer 1 to simulate an 8-bit
+    * counter. To do that, we set the high byte of the timer (TCNT1H), then
+    * set the low byte (TCNT1L) to timer2_count_.
+    */
+
+    TCCR1A = 0;                      // Normal operation
+    TCCR1B = 0;                      // Clear prescaler 
+    TCNT1H = 0xFF;                   // Load counter, high byte
+    TCNT1L = timer2_count_;          // Load counter, low byte
+    TCCR1B |= (1 << CS12) | (0 << CS11) | (1 << CS10);  // Prescaler = 1024   
+    TIMSK1 |= (1 << TOIE1);          // Enable timer overflow  
+
+#endif    
+    
     interrupts();                                   // Enable all interrupts
 
     /* Clear and load frame buffer */
@@ -127,12 +160,13 @@ bool SparkFun_LED_8x7::init(byte pins[NUM_CHAPLEX_PINS])
     display();
     
     return true;
-    
+
 #else
 
     return false;
-    
+
 #endif
+
 }
 
 /**
@@ -140,6 +174,7 @@ bool SparkFun_LED_8x7::init(byte pins[NUM_CHAPLEX_PINS])
  */
 void SparkFun_LED_8x7::display()
 {
+
     for ( byte i = 0; i < NUM_LEDS; i++ ) 
     {
         chaplex_->ledWrite(charlie_leds_[i], frame_buffer_[i]);
@@ -151,6 +186,7 @@ void SparkFun_LED_8x7::display()
  */
 void SparkFun_LED_8x7::clear()
 {
+
     memset(frame_buffer_, 0, NUM_LEDS);
 }
 
@@ -165,6 +201,7 @@ void SparkFun_LED_8x7::clear()
  */
 void SparkFun_LED_8x7::pixel(uint8_t x, uint8_t y, uint8_t on /* = 1 */)
 {
+    
     /* Check to make sure that we are not accessing outside the array */
     if ( x >= ROW_SIZE || y >= COL_SIZE ) 
     {
@@ -194,6 +231,7 @@ void SparkFun_LED_8x7::pixel(uint8_t x, uint8_t y, uint8_t on /* = 1 */)
  */
 void SparkFun_LED_8x7::line(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1)
 {
+
     uint8_t steep;
     uint8_t x;
     uint8_t y;
@@ -263,6 +301,7 @@ void SparkFun_LED_8x7::line(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1)
  */
 void SparkFun_LED_8x7::rect(uint8_t x, uint8_t y, uint8_t width, uint8_t height)
 {
+
     /* We can't have a width or height of 0; there would be no rectangle */
     if ( width == 0 || height == 0 ) 
     {
@@ -297,6 +336,7 @@ void SparkFun_LED_8x7::rectFill(uint8_t x,
                                 uint8_t width, 
                                 uint8_t height)
 {
+
     int i;
     
     /* We can't have a width or height of 0; there would be no rectangle */
@@ -321,6 +361,7 @@ void SparkFun_LED_8x7::rectFill(uint8_t x,
  */
 void SparkFun_LED_8x7::circle(uint8_t x0, uint8_t y0, uint8_t radius)
 {
+
     int8_t y;
     int8_t x;
     int8_t f;
@@ -371,6 +412,7 @@ void SparkFun_LED_8x7::circle(uint8_t x0, uint8_t y0, uint8_t radius)
  */
 void SparkFun_LED_8x7::circleFill(uint8_t x0, uint8_t y0, uint8_t radius)
 {
+       
     int8_t y;
     int8_t x;
     int8_t f;
@@ -422,6 +464,7 @@ void SparkFun_LED_8x7::circleFill(uint8_t x0, uint8_t y0, uint8_t radius)
  */
 void SparkFun_LED_8x7::drawBitmap(const byte bitmap[NUM_LEDS])
 {
+
     uint8_t x;
     uint8_t y;
     
@@ -443,6 +486,7 @@ void SparkFun_LED_8x7::drawBitmap(const byte bitmap[NUM_LEDS])
  */
 void SparkFun_LED_8x7::scrollText(char *in_string)
 {
+    
     scrollText(in_string, 0);
 }
 
@@ -455,6 +499,7 @@ void SparkFun_LED_8x7::scrollText(char *in_string)
  */
 void SparkFun_LED_8x7::scrollText(char *in_string, int times, bool blocking)
 {
+       
     int i;
     int j;
     int char_ind;
@@ -481,7 +526,7 @@ void SparkFun_LED_8x7::scrollText(char *in_string, int times, bool blocking)
     {
         text_len = MAX_CHARS;
     }
-#if LED_8X7_DEBUG
+#ifdef LED_8X7_DEBUG
     Serial.print(F("String length: "));
     Serial.println(text_len, DEC);
 #endif
@@ -489,10 +534,7 @@ void SparkFun_LED_8x7::scrollText(char *in_string, int times, bool blocking)
     /* Calculate size of buffer */
     scroll_len_ = 0;
     dict_size = sizeof(char_table) / sizeof(char_table[0]);
-#if LED_8X7_DEBUG
-    Serial.print(F("Dictionary size: "));
-    Serial.println(dict_size, DEC);
-#endif
+
     for ( i = 0; i < text_len; i++ ) 
     {
         
@@ -510,7 +552,7 @@ void SparkFun_LED_8x7::scrollText(char *in_string, int times, bool blocking)
         scroll_len_ += CHAR_SPACE;
     }
     scroll_len_ += END_SPACE;
-#if LED_8X7_DEBUG
+#ifdef LED_8X7_DEBUG
     Serial.print(F("Scroll buffer size: "));
     Serial.println(scroll_len_, DEC);
 #endif
@@ -581,6 +623,7 @@ void SparkFun_LED_8x7::scrollText(char *in_string, int times, bool blocking)
  */
 void SparkFun_LED_8x7::stopScrolling()
 {
+    
     scrolling_ = 0;
     if ( scroll_buf_ != NULL ) 
     {
@@ -598,6 +641,7 @@ void SparkFun_LED_8x7::stopScrolling()
  */
 uint8_t SparkFun_LED_8x7::getArrayWidth()
 {
+    
     return ROW_SIZE;
 }
 
@@ -608,6 +652,7 @@ uint8_t SparkFun_LED_8x7::getArrayWidth()
  */
 uint8_t SparkFun_LED_8x7::getArrayHeight()
 {
+   
     return COL_SIZE;
 }
 
@@ -636,16 +681,23 @@ void SparkFun_LED_8x7::swap(uint8_t &a, uint8_t &b)
     b = t;
 }
 
+void SparkFun_LED_8x7::isr()
+{
+
 #if defined __AVR_ATmega168__ || \
     defined __AVR_ATmega328__ || \
     defined __AVR_ATmega328P__
 
-void SparkFun_LED_8x7::isr()
-{
-
     /* Disable Timer2 interrupts */
     TIMSK2 &= ~(1 << TOIE2);
 
+#elif defined __AVR_ATmega32U4__
+
+    /* Disable Timer1 interrupts */
+    TIMSK1 &= ~(1 << TOIE1);
+
+#endif    
+    
     /* Shift one column */
     if ( scrolling_ ) 
     {
@@ -691,23 +743,56 @@ void SparkFun_LED_8x7::isr()
 
     /* Display a row and reset counter */
     chaplex_->outRow();            // Output for 1 LED row
+
+#if defined __AVR_ATmega168__ || \
+    defined __AVR_ATmega328__ || \
+    defined __AVR_ATmega328P__
+
     TCNT2 = timer2_count_;         // Load counter for next interrupt
     TIMSK2 |= (1 << TOIE2);        // Enable timer overflow interrupt
+
+#elif defined __AVR_ATmega32U4__
+
+    TCNT1H = 0xFF;                 // Set high bits on counter
+    TCNT1L = timer2_count_;        // Load counter for next interrupt
+    TIMSK1 |= (1 << TOIE1);        // Enable timer overflow interrupt 
+
+#endif
+
 }
 
 /**
- * @brief Global interrupt service routine for Timer 2
+ * @brief Global interrupt service routine for timers
  *
- * We define Timer 2 ISR here to allow us to make calls to functions in the
+ * We define a Timer ISR here to allow us to make calls to functions in the
  * SparkFun_LED_8x7 class. To do this, we instantiate a SparkFun_LED_8x7 object
  * (globally) in the .cpp file.
  **/
+
+#if defined __AVR_ATmega168__ || \
+    defined __AVR_ATmega328__ || \
+    defined __AVR_ATmega328P__
+
+/* Define Timer 2 ISR */
+
 ISR(TIMER2_OVF_vect) 
+
+#elif defined __AVR_ATmega32U4__
+
+/* Define Timer 1 ISR */
+
+ISR(TIMER1_OVF_vect)
+
+#endif
+
 {
     Plex.isr();
 }
 
-#else
+#if !defined __AVR_ATmega168__ && \
+    !defined __AVR_ATmega328__ && \
+    !defined __AVR_ATmega328P__ && \
+    !defined __AVR_ATmega32U4__
 
 void SparkFun_LED_8x7::isr()
 {
